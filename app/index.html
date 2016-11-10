@@ -16,6 +16,7 @@
         sugarWorld.attractors = [];
         sugarWorld.chains = [];
         sugarWorld.treeIndex = 0;
+        sugarWorld.locks = [];
 
         //////////// TREE //////////////////////
 
@@ -219,20 +220,11 @@
 
         Chain.prototype.getNewDockPosition = function() {
             var body0 = this.getBodyAt(0);
-            var vDir = this._distanceVector();
-            var vPos = new Vector(body0.position);
-            return vDir.add(vPos);
+            return [body0.position[0], body0.position[1]];
         } 
 
         Chain.prototype._createConstraint = function(body, lastBody) {
-           var constraint = new p2.LockConstraint(lastBody, body, {
-                collideConnected : false,
-                localAngleB: 0.0
-            });
-            constraint.setStiffness(this.stiffness);
-            constraint.setRelaxation(this.relaxation);
-            world.addConstraint(constraint);
-
+            var constraint = sugarWorld.lockConstraint(body, lastBody, this.stiffness, this.relaxation);
             this.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
         }
 
@@ -394,25 +386,27 @@
                     particleCount: particleCount, 
                     particleWidth: particleWidth,
                     particleHeight: particleHeight,
-                    relaxation: 1,
                     stiffness: 100000,
+                    relaxation: 1,
                     angle: angle
                 });
             sugarWorld.chains.push(chain);
+
+            sugarWorld.createLockToParent(chain, 100000, 1);
+
             sugarWorld.treeIndex++;
         }
 
         sugarWorld.getDockPosition = function(i) {
             if (i == 0) {
                 var pos = [sugarWorld.tree[0].pos[0], sugarWorld.tree[0].pos[1]];
-                pos[1] += 0.2;
+                //pos[1] += 0.2;
                 return pos;
             } 
             else {
                 var parentIndex = sugarWorld.tree[i].parent;
                 var chain = sugarWorld.chains[parentIndex];
-                var pos = chain.getNewDockPosition();
-                return pos.arr;
+                return chain.getNewDockPosition();
             }
         }
 
@@ -424,19 +418,19 @@
                 return chain.getFirstParticle().boxBody.angle;
         }
 
-        sugarWorld.updateDocking = function() {
-            sugarWorld.chains.forEach(function(chain) {
-                var p = chain.getLastParticle();
-                var position = sugarWorld.getDockPosition(chain.id);
-                //TO-DO set angle of dock
-                //vDirection = chain.getParentDirectionVector
-                //var angle = convertdirectionToRadians + sugarWorld.tree[chain.id].angle;
+        // sugarWorld.updateDocking = function() {
+        //     sugarWorld.chains.forEach(function(chain) {
+        //         var p = chain.getLastParticle();
+        //         var position = sugarWorld.getDockPosition(chain.id);
+        //         //TO-DO set angle of dock
+        //         //vDirection = chain.getParentDirectionVector
+        //         //var angle = convertdirectionToRadians + sugarWorld.tree[chain.id].angle;
 
-                p.boxBody.position = position;
-                //p.boxBody.angle = angle;
-                p.boxBody.velocity = [0,0];
-            });       
-        }
+        //         p.boxBody.position = position;
+        //         //p.boxBody.angle = angle;
+        //         p.boxBody.velocity = [0,0];
+        //     });       
+        // }
 
         sugarWorld.onKeyDown = function(e, pos) {
             var keyCode = e.keyCode;
@@ -460,6 +454,35 @@
 
             sugarWorld.attractors.push(attractor);
             return position;
+        }
+
+        sugarWorld.createLockToParent = function(chain, stiffness, relaxation) {
+            var body = chain.getLastBody();
+            var lastBody = sugarWorld.getParentBody(chain.id);
+            var constraint = sugarWorld.lockConstraint(body, lastBody, stiffness, relaxation);
+            sugarWorld.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
+        }
+
+        sugarWorld.getParentBody = function(id) {
+            if (typeof sugarWorld.tree[id].parent == 'undefined')
+                return sugarWorld.attractors[0].boxBody;
+            else {
+                var parentId = sugarWorld.tree[id].parent;
+                return sugarWorld.chains[parentId].getFirstParticle().boxBody;
+            }
+        }
+
+
+        sugarWorld.lockConstraint = function(body, lastBody, stiffness, relaxation) {
+           var constraint = new p2.LockConstraint(lastBody, body, {
+                collideConnected : false,
+                localAngleB: 0.0
+            });
+            constraint.setStiffness(stiffness);
+            constraint.setRelaxation(relaxation);
+            world.addConstraint(constraint);
+
+            return constraint;
         }
 
     // init
@@ -522,9 +545,9 @@
 //
 
             //Fill the docks on all attractors and set their positions
-            sugarWorld.attractors.forEach(function(attractor) {
-                sugarWorld.updateDocking();
-            });
+            // sugarWorld.attractors.forEach(function(attractor) {
+            //     sugarWorld.updateDocking();
+            // });
 
             //Apply colors etc
             sugarWorld.chains.forEach(function(chain) {
