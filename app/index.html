@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>p2.js and Pixi.js example</title>
+    <meta charset="utf-8">
+    <script src="../p2js/demos/js/pixi.js"></script>
+    <script src="../p2js/build/p2.js"></script>
+  </head>
+  <body>
+
+    <script>
+        var renderer, stage, container, graphics, zoom,
+            world;
+
+        var sugarWorld = {};
+        sugarWorld.attractors = [];
+        sugarWorld.chains = [];
+        sugarWorld.treeIndex = 0;
+
+        //////////// TREE //////////////////////
+
+        sugarWorld.tree = [];
+        sugarWorld.tree[0] = {
+                    pos: [0, -3.5],
+                    angle: 0
+                };
+        sugarWorld.tree[1] = {
+                    parent: 0,
+                    angle: 0
+                };
+        sugarWorld.tree[2] = {
+                    parent: 1,
+                    angle: 0
+                };
+        sugarWorld.tree[3] = {
+                    parent: 2,
+                    angle: -Math.PI / 8
+                };
+        sugarWorld.tree[4] = {
+                    parent: 2,
+                    angle: Math.PI / 8
+                };
+        sugarWorld.tree[5] = {
+                    parent: 3,
+                    angle: -Math.PI / 8       
+                };
+        sugarWorld.tree[6] = {
+                    parent: 3,
+                    angle: 0
+                };
+        sugarWorld.tree[7] = {
+                    parent: 4,
+                    angle: 0
+                };
+        sugarWorld.tree[8] = {
+                    parent: 5,
+                    angle: 0
+                };
+        sugarWorld.tree[9] = {
+                    parent: 6,
+                    angle: 0
+                };
+        sugarWorld.tree[10] = {
+                    parent: 7,
+                    angle: 0
+                };
+        sugarWorld.tree[11] = {
+                    parent: 8,
+                    angle: 0
+                };
+        sugarWorld.tree[12] = {
+                    parent: 9,
+                    angle: 0
+                };
+        sugarWorld.tree[13] = {
+                    parent: 10,
+                    angle: 0
+                };
+
+        ////////////// UTIL ////////////////////
+
+        function Vector(components) {
+          this.arr = components;
+        }
+
+        Vector.prototype.add = function(aa) {
+          if(this.arr.length === aa.arr.length) {
+            var result=[];
+            for(var i=0; i<this.arr.length; i++) {
+               result.push(this.arr[i]+aa.arr[i]);
+            }
+            return new Vector(result);
+          } else {
+            return error;
+          }
+        }
+
+        Vector.prototype.subtract = function(aa) {
+          if(this.arr.length === aa.arr.length) {
+            var result=[];
+            for(var i=0; i<this.arr.length; i++) {
+               result.push(this.arr[i]-aa.arr[i]);
+            }
+            return new Vector(result);
+          } else {
+            return error;
+          }
+        }
+
+        Vector.prototype.multiply = function(x) {
+          if(typeof x == 'number') {
+            var result = [];
+            for(var i=0; i<this.arr.length; i++) {
+               result.push(this.arr[i]*x);
+            }
+            return new Vector(result);
+          } else {
+            return error;
+          }
+
+        }
+
+        ////////////// CHAIN ///////////////////
+
+        var Chain = function(settings) {
+            this.id             = typeof settings.id == 'undefined'             ? 'no id'   : settings.id;
+            this.position       = !Array.isArray(settings.position)             ? [-5, 0]   : settings.position;
+            this.velocity       = !Array.isArray(settings.velocity)             ? [10, 50]  : settings.velocity;
+            this.particleCount  = typeof settings.particleCount == 'undefined'  ? 10        : settings.particleCount;
+            this.particleWidth  = typeof settings.particleWidth == 'undefined'  ? 0.2       : settings.particleWidth;
+            this.particleHeight = typeof settings.particleWidth == 'undefined'  ? 0.2       : settings.particleHeight;
+            this.stiffness      = typeof settings.stiffness == 'undefined'      ? 10        : settings.stiffness;
+            this.relaxation     = typeof settings.relaxation == 'undefined'     ? 40        : settings.relaxation;
+            this.fontFamily     = typeof settings.fontFamily == 'undefined'     ? 'Arial'   : settings.fontFamily;
+            this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
+            this.angle          = typeof settings.angle == 'undefined'          ? 0         : settings.angle;
+
+            this.createChain();
+        }
+
+        //Split chain
+        //world.constraints.splice(5,1)
+
+        Chain.prototype.createChain = function() {
+            //Add chain of particles
+            this.particles = [];
+            this.locks = [];
+            var vDistance = this._parentDistanceVector();
+            var vPos = new Vector(this.position);
+            vPos = vPos.add((vDistance.multiply(this.particleCount)));
+            //var posX = this.position[0] + (this.particleCount * vDistance.arr[0])
+            //posY = this.position[1] + (this.particleCount * this.particleHeight);
+            for(var i=0; i<this.particleCount; i++){
+                if(typeof lastBody != 'undefined') {
+                    var vLastPos = new Vector(lastBody.position);
+                    vPos = vLastPos.subtract(vDistance);
+                    //posY = lastBody.position[1] - lastBody.shapes[0].height;
+                }
+
+                var particle = new Particle( { 
+                    position: vPos.arr,
+                    //position: [this.position[0], posY], 
+                    angle: this.angle,
+                    width: this.particleWidth, 
+                    txt: i
+                });
+                this.particles.push(particle);
+                
+                if(typeof lastBody != 'undefined'){
+                    this._createConstraint(particle.boxBody, lastBody);
+                }
+                var lastBody = particle.boxBody;
+            }
+            //Set initial velocity of the last particle.
+            this.getLastBody().velocity = this.velocity;
+        }
+
+        Chain.prototype.getLastBody = function() {
+            return this.particles[this.particles.length-1].boxBody;
+        }
+
+        Chain.prototype.getLastParticle = function() {
+            return this.particles[this.particles.length-1];
+        }
+
+        Chain.prototype.getFirstParticle = function() {
+            return this.particles[0];
+        }
+
+        Chain.prototype.getBodyAt = function(i) {
+            return this.particles[i].boxBody;
+        }
+
+        // Get a normalized vector of the direction between particle 0 and 1
+        // Useful when adding a new branch to the tree
+        Chain.prototype._distanceVector = function() {
+            if (this.particles.length == 0) {
+                var vDir = new Vector([0, this.particleHeight]);
+            } else {
+                var body0 = this.getBodyAt(0);
+                var body1 = this.getBodyAt(1);
+                var v0 = new Vector(body0.position);
+                var v1 = new Vector(body1.position);
+                var vDir = v0.subtract(v1);
+            }
+            return vDir;
+        }  
+
+        Chain.prototype._parentDistanceVector = function() {
+            if (typeof sugarWorld.tree[this.id].parent == 'undefined')
+                return new Vector([0, this.particleHeight]); 
+            else {
+                var parentIndex = sugarWorld.tree[this.id].parent;
+                var parent = sugarWorld.chains[parentIndex];
+                return parent._distanceVector();
+            }
+        }
+
+        Chain.prototype.getNewDockPosition = function() {
+            var body0 = this.getBodyAt(0);
+            var vDir = this._distanceVector();
+            var vPos = new Vector(body0.position);
+            return vDir.add(vPos);
+        } 
+
+        Chain.prototype._createConstraint = function(body, lastBody) {
+           var constraint = new p2.LockConstraint(lastBody, body, {
+                collideConnected : false,
+                localAngleB: 0.0
+            });
+            constraint.setStiffness(this.stiffness);
+            constraint.setRelaxation(this.relaxation);
+            world.addConstraint(constraint);
+
+            this.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
+        }
+
+        Chain.prototype.resetProperties = function() {
+            this.getLastParticle().dockedState = "none";
+            this.getLastParticle().attractionForce = [0,0];
+        }
+
+        Chain.prototype.update = function() {
+            this.setDebugColors();
+
+            // var p = this.getLastParticle();
+
+            // //Update force on the particle
+ 
+            // p.boxBody.force[0] = p.attractionForce[0];
+            // p.boxBody.force[1] = p.attractionForce[1];
+
+            //Transfer positions of the physics objects to Pixi.js graphic elements
+            for (var i = 0; i < this.particles.length; i++) {
+                this.particles[i].update();
+            }
+        }
+
+        Chain.prototype.setDebugColors = function() {
+            p = this.getLastParticle();
+            switch(p.dockedState) {
+                case "none":
+                    p.setBoxColor(0xff0000);
+                    break;
+                case "docked":
+                    p.setBoxColor(0x0000ff);
+                    break;
+            }
+        }
+
+        //////////////// PARTICLE //////////////////////
+
+        //A Particle is an element of with a physics body and some pixi graphics (a character)
+        var Particle = function(settings) {
+            this.width          = typeof settings.width == 'undefined'          ? 0.2       : settings.width;
+            this.height         = typeof settings.height == 'undefined'         ? 0.2       : settings.height;
+            this.position       = !Array.isArray(settings.position)             ? [-5, 0]   : settings.position;
+            this.txtString      = typeof settings.txt == 'undefined'            ? "x"       : settings.txt;
+            this.fontFamily     = typeof settings.fontFamily == 'undefined'     ? 'Arial'   : settings.fontFamily;
+            this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
+            this.velocity       = !Array.isArray(settings.velocity)             ? [0, 0]    : settings.velocity;
+            this.static         = typeof settings.static == 'undefined'         ? false     : settings.static;
+            this.isAttractor    = typeof settings.isAttractor == 'undefined'    ? false     : settings.isAttractor;
+            this.angle          = typeof settings.angle == 'undefined'          ? 0         : settings.angle;
+
+            this.dockedState = "none";
+            this.attractionForce = [0,0];
+             // Add a box
+            this.addPhysicsBody();
+            this.drawBox();
+        }
+
+        Particle.prototype.addPhysicsBody = function () {
+            this.boxShape = new p2.Box({ width: this.width, height: this.height });
+            this.boxBody = new p2.Body({
+                mass:!this.static,
+                fixedRotation: this.static,
+                position:this.position,
+                angularVelocity:0,
+                damping: 0.3,
+                velocity: this.velocity,
+                angle: this.angle
+            });
+            this.boxBody.addShape(this.boxShape);
+            world.addBody(this.boxBody);
+        }
+
+        Particle.prototype.drawBox = function () {
+            // Draw the box.
+            this.graphics = new PIXI.Graphics();
+            this.setBoxColor(0xff0000);
+
+            // Add the box to our container
+            container.addChild(this.graphics);
+
+            // Add text to box
+            this.txtObject = new PIXI.Text(this.txtString, {fontFamily : this.fontFamily, fontSize: this.fontSize, fill : 0x001010, align : 'center'});
+            this.txtObject.scale.x = 1/zoom;
+            this.txtObject.scale.y = -1/zoom;
+            this.txtObject.position.x = this.boxShape.height;
+            this.txtObject.position.y = this.boxShape.width/2;
+            this.txtObject.rotation = - Math.PI / 2;
+            this.graphics.addChild(this.txtObject);
+            this.moveGraphics();
+        }
+
+        Particle.prototype.setBoxColor = function(col) {
+            this.graphics.beginFill(col);
+            this.graphics.drawRect(-this.boxShape.width/2, -this.boxShape.height/2, this.boxShape.width, this.boxShape.height);
+        }
+
+        Particle.prototype.update = function() {
+            this.moveGraphics();
+        }
+
+        //Transfer positions of the physics objects to Pixi.js
+        Particle.prototype.moveGraphics = function() {
+            //Update position of graphics to match the physics
+            this.graphics.position.x = this.boxBody.position[0];
+            this.graphics.position.y = this.boxBody.position[1];
+            this.graphics.rotation =   this.boxBody.angle;
+        }
+
+        Particle.prototype.updateAttractionAndDocking = function() {
+            var attractor = this;
+
+            //Reset properties
+            attractor.attracts = [];
+            attractor.dock = [];
+
+            //Measure distance from attractor to all chains and add to attracts property
+            sugarWorld.chains.forEach(function(chain) {
+                var d = sugarWorld.distanceBetween(chain.getLastParticle(), attractor);
+                attractor.attracts.push({distance: d, chain: chain});
+            });
+
+            // if distance is smaller than 0.5 add to docked property
+            // do not add if chain is already docked to another attractor
+            attractor.attracts.forEach(function(el){
+                if (el.distance < 1.5 && el.chain.getLastParticle().dockedState == "none") {
+                    attractor.dock.push(el);
+                }
+            })
+
+           // Sort docked property by distance
+            attractor.dock.sort(function(a, b) {
+                return parseFloat(a.distance) - parseFloat(b.distance);
+            });
+
+            // trim docked to two elements
+            attractor.dock = attractor.dock.slice(0, attractor.dockSlots);
+
+           // set docked property on particle
+            attractor.dock.forEach(function(el) {
+                el.chain.getLastParticle().dockedState = "docked";
+            });
+
+            // Sort docked chains by id
+            attractor.dock.sort(function(a, b) {
+                return a.chain.id - b.chain.id;
+            });
+
+            // Lock the end particle in place so that it sits on top of the attractor
+            attractor.dock.forEach(function(el, i) {
+                var p = el.chain.getLastParticle();
+                //Offset the first docked element to the left and the second element to the right
+                var offsetX = i == 0 ? -0.15 : 0.15;
+                var offsetAngle = i == 0 ? Math.PI / 8 : - (Math.PI / 8);
+                p.boxBody.position[0] = attractor.boxBody.position[0] + offsetX;
+                p.boxBody.position[1] = attractor.boxBody.position[1] + 0.2;
+                p.boxBody.angle = offsetAngle;
+                p.boxBody.velocity = [0,0];         
+            });
+
+            //Set the attractionForce on all chains
+            //There is only attraction if the dock is not full
+            if (typeof attractor.dock != 'undefined' && attractor.dock.length == attractor.dockSlots) {
+                //do nothing
+            }
+            else {
+                sugarWorld.chains.forEach(function(chain) {
+                    sugarWorld.addForce(chain.getLastParticle(), attractor);
+                });
+            }
+        }
+
+// WALLS
+
+        function addWalls(settings) {
+
+            if (!Array.isArray(settings.topLeft))
+                settings.topLeft = [-2,-2];
+
+            if (!Array.isArray(settings.bottomRight))
+                settings.bottomRight = [2,2];
+
+            //Add a floor
+            var planeShape01 = new p2.Plane();
+            var planeBody01 = new p2.Body({ position:[0,settings.bottomRight[1]] });
+            planeBody01.addShape(planeShape01);
+            world.addBody(planeBody01);
+
+            // Add right wall
+            var planeShape02 = new p2.Plane();
+            var planeBody02 = new p2.Body({ position:[0,0] });
+            planeBody02.angle = Math.PI / 2;
+            planeBody02.position = [settings.bottomRight[0],0];
+            planeBody02.addShape(planeShape02);
+            world.addBody(planeBody02);
+
+            // Add left wall
+            var planeShape03 = new p2.Plane();
+            var planeBody03 = new p2.Body({ position:[0,0] });
+            planeBody03.angle = -Math.PI / 2;
+            planeBody03.position = [settings.topLeft[0],0];
+            planeBody03.addShape(planeShape03);
+            world.addBody(planeBody03);
+
+            //Add a ceiling
+            var planeShape04 = new p2.Plane();
+            var planeBody04 = new p2.Body({ position:[0,settings.topLeft[1]] });
+            planeBody04.angle = Math.PI;
+            planeBody04.addShape(planeShape04);
+            world.addBody(planeBody04);
+        }
+
+        //////////////// MY SCENE //////////////////
+
+        sugarWorld.distanceBetween = function(particleA,particleB){
+            if (particleA != null && particleB != null) {
+                var dx = particleA.boxBody.position[0] - particleB.boxBody.position[0];  //distance between bodies
+                var dy = particleA.boxBody.position[1] - particleB.boxBody.position[1];  
+                var dist = Math.sqrt(dx*dx + dy*dy);     //pythagoras ^^  (get the distance to each other)
+                return dist;
+            }
+            else
+                return null;
+        }
+
+        sugarWorld.accelerateToObject = function(particle1, particle2, speed) {
+            if (typeof speed === 'undefined') { 
+                speed = 2;
+            }
+
+            if (typeof particle2 != 'undefined' && particle2 != null) {
+                var angle = Math.atan2(particle2.boxBody.position[1] - particle1.boxBody.position[1], particle2.boxBody.position[0] - particle1.boxBody.position[0]);
+                particle1.boxBody.rotation = angle + Math.PI;  // correct angle if wanted    
+                particle1.boxBody.force[0] = Math.cos(angle) * speed;    // accelerateToObject     
+                particle1.boxBody.force[1] = Math.sin(angle) * speed;
+            }
+        }
+
+
+        sugarWorld.addForce = function(particle1, particle2, speed) {
+            if (typeof speed === 'undefined') { 
+                speed = 2;
+            }
+
+            if (typeof particle2 != 'undefined' && particle2 != null) {
+                var angle = Math.atan2(particle2.boxBody.position[1] - particle1.boxBody.position[1], particle2.boxBody.position[0] - particle1.boxBody.position[0]);
+                particle1.boxBody.rotation = angle + Math.PI;  // correct angle if wanted    
+                particle1.attractionForce[0] += Math.cos(angle) * speed;    // accelerateToObject     
+                particle1.attractionForce[1] += Math.sin(angle) * speed;
+            }
+        }        
+
+        sugarWorld.createChain = function() {
+            var particleCount = 7;
+            var particleWidth = 0.3;
+            var particleHeight = 0.2;
+
+            var position = sugarWorld.getDockPosition(sugarWorld.treeIndex);
+            var angle = sugarWorld.getDockAngle(sugarWorld.treeIndex);
+
+            var chain = new Chain({
+                    id: sugarWorld.treeIndex,
+                    position: position, 
+                    particleCount: particleCount, 
+                    particleWidth: particleWidth,
+                    particleHeight: particleHeight,
+                    relaxation: 1,
+                    stiffness: 100000,
+                    angle: angle
+                });
+            sugarWorld.chains.push(chain);
+            sugarWorld.treeIndex++;
+        }
+
+        sugarWorld.getDockPosition = function(i) {
+            if (i == 0) {
+                var pos = [sugarWorld.tree[0].pos[0], sugarWorld.tree[0].pos[1]];
+                pos[1] += 0.2;
+                return pos;
+            } 
+            else {
+                var parentIndex = sugarWorld.tree[i].parent;
+                var chain = sugarWorld.chains[parentIndex];
+                var pos = chain.getNewDockPosition();
+                return pos.arr;
+            }
+        }
+
+        sugarWorld.getDockAngle = function(i) {
+                if (i == 0)
+                    return 0;
+                var parentIndex = sugarWorld.tree[i].parent;
+                var chain = sugarWorld.chains[parentIndex];
+                return chain.getFirstParticle().boxBody.angle;
+        }
+
+        sugarWorld.updateDocking = function() {
+            sugarWorld.chains.forEach(function(chain) {
+                var p = chain.getLastParticle();
+                var position = sugarWorld.getDockPosition(chain.id);
+                //TO-DO set angle of dock
+                //var angle = sugarWorld.tree[chain.id].angle;
+
+                p.boxBody.position = position;
+                //p.boxBody.angle = angle;
+                p.boxBody.velocity = [0,0];
+            });       
+        }
+
+        sugarWorld.onKeyDown = function(e, pos) {
+            var keyCode = e.keyCode;
+            //Create treeAttractor on keypress '0'
+            if(keyCode==48) {
+                sugarWorld.createChain();
+            }
+            //Debug particles on 'x'
+            else if (keyCode = 88) {
+                 sugarWorld.debugLastParticles();
+            }
+            else
+                console.log("keyCode", e.keyCode);
+        }
+
+        sugarWorld.createNewAttractor = function() {
+            var position = sugarWorld.tree[0].pos;
+
+            var attractor = new Particle( { 
+                position: position, 
+                static: true,
+                width: 0.2, 
+                txt: "o",
+                isAttractor: true
+            });
+            //attractor.dockSlots = 2;
+
+            sugarWorld.attractors.push(attractor);
+            return position;
+        }
+
+        sugarWorld.debugLastParticles = function() {
+            sugarWorld.chains.forEach(function(chain) {
+                var p = chain.getLastParticle();
+                console.log("lastParticle",p);
+            });
+        }
+
+    // init
+
+        init();
+        animate();
+
+        function init(){
+
+    // P2
+
+            // Init p2.js
+            world = new p2.World();
+            world.gravity = [0,0];
+            world.defaultContactMaterial.friction = 0.0;
+
+            addWalls({ topLeft: [-6, 3.5], bottomRight: [6, -3.5] });
+
+    //PIXI
+
+            // Pixi.js zoom level
+            zoom = 100;
+
+            // Initialize the stage
+            renderer =  PIXI.autoDetectRenderer(1200, 800),
+            stage = new PIXI.Stage(0xbbbbbb);
+
+            // We use a container inside the stage for all our content
+            // This enables us to zoom and translate the content
+            container =     new PIXI.DisplayObjectContainer(),
+            stage.addChild(container);
+
+            // Add the canvas to the DOM
+            document.body.appendChild(renderer.view);
+
+            // Add transform to the container so that the coordinates of elements match the p2 physics coordinates
+            container.position.x =  renderer.width/2; // center at origin
+            container.position.y =  renderer.height/2;
+            container.scale.x =  zoom;  // zoom in
+            container.scale.y = -zoom; // Note: we flip the y axis to make "up" the physics "up"
+
+    //  
+
+            var pos = sugarWorld.createNewAttractor();
+
+
+            document.addEventListener("keydown", function(e) {
+                sugarWorld.onKeyDown(e, pos);
+            }, false);
+        }
+
+        // Animation loop
+        function animate(t){
+            t = t || 0;
+            requestAnimationFrame(animate);
+
+            // Move physics bodies forward in time
+            world.step(1/60);
+
+//
+
+            sugarWorld.chains.forEach(function(chain) {
+                 chain.resetProperties();
+            })
+
+
+            //Fill the docks on all attractors
+            sugarWorld.attractors.forEach(function(attractor) {
+                //attractor.updateAttractionAndDocking();
+                sugarWorld.updateDocking();
+            });
+
+            //Apply forces, colors etc
+            sugarWorld.chains.forEach(function(chain) {
+                chain.update();
+            });
+
+            // Render scene
+            renderer.render(stage);
+        }
+
+        //
+
+    </script>
+</body>
+</html>

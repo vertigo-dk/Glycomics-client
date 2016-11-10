@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>p2.js and Pixi.js example</title>
+    <meta charset="utf-8">
+    <script src="../demos/js/pixi.js"></script>
+    <script src="../build/p2.js"></script>
+  </head>
+  <body>
+
+    <script>
+        var renderer, stage, container, graphics, zoom,
+            world, boxShape, boxBody, planeBody, planeShape;
+
+        var Particle = function(startPos) {
+             // Add a box
+            this.addPhysicsBody(startPos);
+            this.drawBox();           
+        }
+
+        Particle.prototype.addPhysicsBody = function (position) {
+            this.boxShape = new p2.Box({ width: 1, height: 1 });
+            this.boxBody = new p2.Body({
+                mass:1,
+                position:position,
+                angularVelocity:1
+            });
+            this.boxBody.addShape(this.boxShape);
+            world.addBody(this.boxBody);
+        }
+
+        Particle.prototype.drawBox = function () {
+            // Draw the box.
+            this.graphics = new PIXI.Graphics();
+            this.graphics.beginFill(0xff0000);
+            this.graphics.drawRect(-this.boxShape.width/2, -this.boxShape.height/2, this.boxShape.width, this.boxShape.height);
+
+            // Add the box to our container
+            container.addChild(this.graphics);
+
+            // Add text to box
+            this.txt = new PIXI.Text('This is a pixi text',{fontFamily : 'Arial', fontSize: 24, fill : 0x001010, align : 'center'});
+            this.txt.scale.x = 1/zoom;
+            this.txt.scale.y = -1/zoom;
+            this.txt.position.x = -this.boxShape.width/2;
+            this.txt.position.y = this.boxShape.height/2;
+            this.graphics.addChild(this.txt);
+        }
+
+        //Transfer positions of the physics objects to Pixi.js
+        Particle.prototype.moveGraphics = function() {
+            this.graphics.position.x = this.boxBody.position[0];
+            this.graphics.position.y = this.boxBody.position[1];
+            this.graphics.rotation =   this.boxBody.angle;
+        }
+
+        var particle;
+
+    // init
+
+            init();
+            animate();
+
+        function init(){
+
+    // P2
+
+            // Init p2.js
+            world = new p2.World();
+
+            // Add a plane
+            planeShape = new p2.Plane();
+            planeBody = new p2.Body({ position:[0,-1] });
+            planeBody.addShape(planeShape);
+            world.addBody(planeBody);
+
+    //PIXI
+
+            // Pixi.js zoom level
+            zoom = 100;
+
+            // Initialize the stage
+            renderer =  PIXI.autoDetectRenderer(1200, 400),
+            stage = new PIXI.Stage(0xFFFFFF);
+
+            // We use a container inside the stage for all our content
+            // This enables us to zoom and translate the content
+            container =     new PIXI.DisplayObjectContainer(),
+            stage.addChild(container);
+
+            // Add the canvas to the DOM
+            document.body.appendChild(renderer.view);
+
+            // Add transform to the container so that the coordinates of elements match the p2 physics coordinates
+            container.position.x =  renderer.width/2; // center at origin
+            container.position.y =  renderer.height/2;
+            container.scale.x =  zoom;  // zoom in
+            container.scale.y = -zoom; // Note: we flip the y axis to make "up" the physics "up"
+
+            //particle = new Particle();
+            particle = new Particle([0,2]);   
+            particle2 = new Particle([0,1]);   
+        }
+
+        // Animation loop
+        function animate(t){
+            t = t || 0;
+            requestAnimationFrame(animate);
+
+            // Move physics bodies forward in time
+            world.step(1/60);
+
+            // //Transfer positions of the physics objects to Pixi.js
+            particle.moveGraphics();
+            particle2.moveGraphics();
+
+            // Render scene
+            renderer.render(stage);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>p2.js and Pixi.js example</title>
+    <meta charset="utf-8">
+    <script src="../demos/js/pixi.js"></script>
+    <script src="../build/p2.js"></script>
+  </head>
+  <body>
+
+    <script>
+        var renderer, stage, container, graphics, zoom,
+            world;
+
+        ////////////// CHAIN ///////////////////
+
+        var Chain = function(settings) {
+            this.position       = !Array.isArray(settings.position)             ? [-5, 0]   : settings.position;
+            this.velocity       = !Array.isArray(settings.velocity)             ? [10, 50]  : settings.velocity;
+            this.particleCount  = typeof settings.particleCount == 'undefined'  ? 10        : settings.particleCount;
+            this.particleWidth  = typeof settings.particleWidth == 'undefined'  ? 0.2       : settings.particleWidth;
+            this.stiffness      = typeof settings.stiffness == 'undefined'      ? 10        : settings.stiffness;
+            this.relaxation     = typeof settings.relaxation == 'undefined'     ? 40        : settings.relaxation;
+            this.fontFamily     = typeof settings.fontFamily == 'undefined'     ? 'Arial'   : settings.fontFamily;
+            this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
+
+            this.createChain();
+        }
+
+        //Split chain
+        //world.constraints.splice(5,1)
+
+        Chain.prototype.createChain = function() {
+            //Add chain of particles
+            this.particles = [];
+            this.locks = [];
+            for(var i=0; i<this.particleCount; i++){
+                if(typeof lastBody != 'undefined') {
+                    posX = lastBody.position[0] + lastBody.shapes[0].width;
+                }
+                else {
+                    posX = this.position[0];
+                }
+
+                var particle = new Particle( { 
+                    position: [posX,this.position[1]], 
+                    width: this.particleWidth, 
+                    txt: i
+                });
+                this.particles.push(particle);
+                
+                if(typeof lastBody != 'undefined'){
+                    this._createConstraint(particle.boxBody, lastBody);
+                }
+                var lastBody = particle.boxBody;
+            }
+            //Set initial velocity of the last particle.
+            this.getLastBody().velocity = this.velocity;
+        }
+
+        Chain.prototype.getLastBody = function() {
+            return this.particles[this.particles.length-1].boxBody;
+        }
+
+        Chain.prototype.getLastParticle = function() {
+            return this.particles[this.particles.length-1];
+        }
+
+        Chain.prototype._createConstraint = function(body, lastBody) {
+           var constraint = new p2.LockConstraint(lastBody, body, {
+                collideConnected : false,
+                localAngleB: 0.1
+            });
+            constraint.setStiffness(this.stiffness);
+            constraint.setRelaxation(this.relaxation);
+            world.addConstraint(constraint);
+
+            this.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
+        }
+
+        Chain.prototype.update = function() {
+            //Update the attraction to a tree attractor
+            this.updateAttractedTo();
+            this.checkDistanceToAttractor();
+            this.applyAttraction();
+
+            this.setDebugColors();
+
+            //Transfer positions of the physics objects to Pixi.js graphic elements
+            for (var i = 0; i < this.particles.length; i++) {
+                this.particles[i].update();
+            }
+        }
+
+        Chain.prototype.setDebugColors = function() {
+            p = this.getLastParticle();
+            switch(p.dockedState) {
+                case "none":
+                    p.setBoxColor(0xff0000);
+                    break;
+                case "docked":
+                    p.setBoxColor(0x0000ff);
+                    break;
+            }
+        }
+
+        Chain.prototype.updateAttractedTo = function() {
+            var p = this.getLastParticle();
+            if (p.attractedTo != null && p.attractedTo.dockIsFull)
+                p.attractedTo == null;
+        }
+
+        Chain.prototype.checkDistanceToAttractor = function() {
+            var p = this.getLastParticle();
+            if (p.attractedTo == null)
+                return; 
+            var d = sugarWorld.distanceBetween(p, p.attractedTo);
+            if (d < 0.5 && p.dockedState == "none") {
+                p.dockedState = "docked";
+            }
+        }
+
+        Chain.prototype.applyAttraction = function() {
+            //Apply attraction
+            var p = this.getLastParticle();
+            if (p.dockedState == "none" && p.attractedTo != null)
+                sugarWorld.accelerateToObject(p, p.attractedTo);
+            if (p.dockedState == "docked" && p.attractedTo != null) {
+                p.boxBody.position[0] = p.attractedTo.boxBody.position[0];
+                p.boxBody.position[1] = p.attractedTo.boxBody.position[1] + 0.2;
+                p.boxBody.angle = -Math.PI/2;
+                p.boxBody.velocity = [0,0];
+            }
+        }
+
+        //////////////// PARTICLE //////////////////////
+
+        //A Particle is an element of with a physics body and some pixi graphics (a character)
+        var Particle = function(settings) {
+            this.width      = typeof settings.width == 'undefined'      ? 0.2       : settings.width;
+            this.height     = typeof settings.height == 'undefined'     ? 0.2       : settings.height;
+            this.position   = !Array.isArray(settings.position)         ? [-5, 0]   : settings.position;
+            this.txtString  = typeof settings.txt == 'undefined'        ? "x"       : settings.txt;
+            this.fontFamily = typeof settings.fontFamily == 'undefined' ? 'Arial'   : settings.fontFamily;
+            this.fontSize   = typeof settings.fontSize == 'undefined'   ? 24        : settings.fontSize;
+            this.velocity   = !Array.isArray(settings.velocity)         ? [0, 0]    : settings.velocity;
+            this.static     = typeof settings.static == 'undefined'   ? false     : settings.static;
+
+            this.dockedState = "none";
+
+             // Add a box
+            this.addPhysicsBody();
+            this.drawBox();
+        }
+
+        Particle.prototype.addPhysicsBody = function () {
+            this.boxShape = new p2.Box({ width: this.width, height: this.height });
+            this.boxBody = new p2.Body({
+                mass:!this.static,
+                fixedRotation: this.static,
+                position:this.position,
+                angularVelocity:1,
+                damping: 0.0,
+                velocity: this.velocity
+            });
+            this.boxBody.addShape(this.boxShape);
+            world.addBody(this.boxBody);
+        }
+
+        Particle.prototype.drawBox = function () {
+            // Draw the box.
+            this.graphics = new PIXI.Graphics();
+            // this.graphics.beginFill(0xff0000);
+            // this.graphics.drawRect(-this.boxShape.width/2, -this.boxShape.height/2, this.boxShape.width, this.boxShape.height);
+            this.setBoxColor(0xff0000);
+
+            // Add the box to our container
+            container.addChild(this.graphics);
+
+            // Add text to box
+            this.txtObject = new PIXI.Text(this.txtString, {fontFamily : this.fontFamily, fontSize: this.fontSize, fill : 0x001010, align : 'center'});
+            this.txtObject.scale.x = 1/zoom;
+            this.txtObject.scale.y = -1/zoom;
+            this.txtObject.position.x = -this.boxShape.width/2;
+            this.txtObject.position.y = this.boxShape.height/2;
+            this.graphics.addChild(this.txtObject);
+            this.moveGraphics();
+        }
+
+        Particle.prototype.setBoxColor = function(col) {
+            this.graphics.beginFill(col);
+            this.graphics.drawRect(-this.boxShape.width/2, -this.boxShape.height/2, this.boxShape.width, this.boxShape.height);
+        }
+
+        Particle.prototype.update = function() {
+            this.moveGraphics();
+        }
+
+        //Transfer positions of the physics objects to Pixi.js
+        Particle.prototype.moveGraphics = function() {
+            //Update position of graphics to match the physics
+            this.graphics.position.x = this.boxBody.position[0];
+            this.graphics.position.y = this.boxBody.position[1];
+            this.graphics.rotation =   this.boxBody.angle;
+        }
+
+// WALLS
+
+        //Settings: { topLeft: [-2, 2], bottomRight: [2, -2] }
+        function addWalls(settings) {
+
+            if (!Array.isArray(settings.topLeft))
+                settings.topLeft = [-2,-2];
+
+            if (!Array.isArray(settings.bottomRight))
+                settings.bottomRight = [2,2];
+
+            //Add a floor
+            var planeShape01 = new p2.Plane();
+            var planeBody01 = new p2.Body({ position:[0,settings.bottomRight[1]] });
+            planeBody01.addShape(planeShape01);
+            world.addBody(planeBody01);
+
+            // Add right wall
+            var planeShape02 = new p2.Plane();
+            var planeBody02 = new p2.Body({ position:[0,0] });
+            planeBody02.angle = Math.PI / 2;
+            planeBody02.position = [settings.bottomRight[0],0];
+            planeBody02.addShape(planeShape02);
+            world.addBody(planeBody02);
+
+            // Add left wall
+            var planeShape03 = new p2.Plane();
+            var planeBody03 = new p2.Body({ position:[0,0] });
+            planeBody03.angle = -Math.PI / 2;
+            planeBody03.position = [settings.topLeft[0],0];
+            planeBody03.addShape(planeShape03);
+            world.addBody(planeBody03);
+
+            //Add a ceiling
+            var planeShape04 = new p2.Plane();
+            var planeBody04 = new p2.Body({ position:[0,settings.topLeft[1]] });
+            planeBody04.angle = Math.PI;
+            planeBody04.addShape(planeShape04);
+            world.addBody(planeBody04);
+        }
+
+        //////////////// MY SCENE //////////////////
+
+        var sugarWorld = {};
+        sugarWorld.attractors = [];
+
+        sugarWorld.distanceBetween = function(particleA,particleB){
+            if (particleA != null && particleB != null) {
+                var dx = particleA.boxBody.position[0] - particleB.boxBody.position[0];  //distance between bodies
+                var dy = particleA.boxBody.position[1] - particleB.boxBody.position[1];  
+                var dist = Math.sqrt(dx*dx + dy*dy);     //pythagoras ^^  (get the distance to each other)
+                return dist;
+            }
+            else
+                return null;
+        }
+
+        sugarWorld.accelerateToObject = function(particle1, particle2, speed) {
+            if (typeof speed === 'undefined') { 
+                speed = 2;
+            }
+
+            if (typeof particle2 != 'undefined' && particle2 != null) {
+                var angle = Math.atan2(particle2.boxBody.position[1] - particle1.boxBody.position[1], particle2.boxBody.position[0] - particle1.boxBody.position[0]);
+                particle1.boxBody.rotation = angle + Math.PI;  // correct angle if wanted    
+                particle1.boxBody.force[0] = Math.cos(angle) * speed;    // accelerateToObject     
+                particle1.boxBody.force[1] = Math.sin(angle) * speed;
+            }
+        }
+
+        sugarWorld.createChains = function() {
+            sugarWorld.chains = [];
+            for (var i = 0; i < 11; i++) {
+                var chain = new Chain({
+                    position: [-3, 0], 
+                    particleCount: 7, 
+                    particleWidth: 0.3,
+                    relaxation: 1,
+                    stiffness: 10000
+                });
+                sugarWorld.chains.push(chain);
+            }
+        }
+
+         sugarWorld.onKeyDown = function(e) {
+            var keyCode = e.keyCode;
+            //Create treeAttractor on keypress '0'
+            if(keyCode==48) {
+                sugarWorld.createNewAttractor()                  
+            }
+            //Debug particles on 'x'
+            else if (keyCode = 88) {
+                 sugarWorld.debugLastParticles();
+            }
+            else
+                console.log("keyCode", e.keyCode);
+        }
+
+        sugarWorld.createNewAttractor = function() {
+            var attractor = new Particle( { 
+                position: [Math.random() * 4,-3.5], 
+                static: true,
+                width: 0.2, 
+                txt: "o"
+            });
+            attractor.dockIsFull = false;
+            attractor.dockSlots = 2;
+
+            //Set attractor on the last particle of each chain
+            sugarWorld.chains.forEach(function(chain) {
+                chain.getLastParticle().attractedTo = attractor;
+            });
+            sugarWorld.attractors.push(attractor);  
+        }
+
+        sugarWorld.debugLastParticles = function() {
+            sugarWorld.chains.forEach(function(chain) {
+                var p = chain.getLastParticle();
+                console.log("lastParticle",p);
+            });
+        }
+
+    // init
+
+        init();
+        animate();
+
+        function init(){
+
+    // P2
+
+            // Init p2.js
+            world = new p2.World();
+            world.gravity = [0,0];
+            world.defaultContactMaterial.friction = 0.0;
+
+            addWalls({ topLeft: [-6, 3.5], bottomRight: [6, -3.5] });
+
+    //PIXI
+
+            // Pixi.js zoom level
+            zoom = 100;
+
+            // Initialize the stage
+            renderer =  PIXI.autoDetectRenderer(1200, 800),
+            stage = new PIXI.Stage(0xbbbbbb);
+
+            // We use a container inside the stage for all our content
+            // This enables us to zoom and translate the content
+            container =     new PIXI.DisplayObjectContainer(),
+            stage.addChild(container);
+
+            // Add the canvas to the DOM
+            document.body.appendChild(renderer.view);
+
+            // Add transform to the container so that the coordinates of elements match the p2 physics coordinates
+            container.position.x =  renderer.width/2; // center at origin
+            container.position.y =  renderer.height/2;
+            container.scale.x =  zoom;  // zoom in
+            container.scale.y = -zoom; // Note: we flip the y axis to make "up" the physics "up"
+
+    //
+
+            sugarWorld.createChains();
+
+            document.addEventListener("keydown", sugarWorld.onKeyDown, false);
+        }
+
+        // Animation loop
+        function animate(t){
+            t = t || 0;
+            requestAnimationFrame(animate);
+
+            // Move physics bodies forward in time
+            world.step(1/60);
+
+            //Step through chains and update the graphics and forces
+            var docked = 0;
+            sugarWorld.chains.forEach(function(chain) {
+                chain.update();
+            });
+
+            //Check if the attractors are full
+            sugarWorld.attractors.forEach(function(attractor) {
+                attractor.dockIsFull = false;
+                sugarWorld.chains.forEach(function(chain) {
+                    var p = chain.getLastParticle();
+                    if (p.attractedTo == attractor) {
+                        if (p.dockedState == "docked")
+                            docked++;
+                        if(docked > attractor.dockSlots ) {
+                            p.attractedTo = null;
+                            p.dockedState = "none";
+                            attractor.dockIsFull = true;
+                        }
+                    }
+                });
+            });
+
+            // Render scene
+            renderer.render(stage);
+        }
+
+        //
+
+    </script>
+</body>
+</html>

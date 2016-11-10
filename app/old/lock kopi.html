@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lock constraint demo - p2.js physics engine</title>
+    <script src="../build/p2.js"></script>
+    <script src="../build/p2.renderer.js"></script>
+    <link href="css/demo.css" rel="stylesheet"/>
+    <meta name="description" content="How to use the LockConstraint.">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+      <style>
+        body {
+          font-family: "Comic Sans MS", sans-serif;
+        }
+        .red-block, .green-block {
+          padding:5px;
+          border: 2px solid black;
+          border-radius:4px;
+        }
+        .red-block {
+          background-color: #f46;
+        }
+        .green-block {
+          background-color: #4b6;
+        }
+      </style>
+    </head>
+<body>
+ <div class="p2-dynamic-body red-block" style="position:absolute;left:175px;width:50px;height:50px;">
+    Cool!
+  </div>
+  <div class="p2-dynamic-body red-block"style="position:absolute;left:75px;width:50px;height:50px;">
+    DOM
+  </div>
+  <div class="p2-dynamic-body red-block"style="position:absolute;left:230px;width:50px;height:50px;">
+    Such
+  </div>
+  <div class="p2-dynamic-body red-block"style="position:absolute;left:280px;width:50px;height:50px;">
+    Physics
+  </div>
+  <div class="p2-dynamic-body red-block"style="position:absolute;left:100px;width:30px;height:50px;">
+    LOL
+  </div> 
+    <script>
+        // Create demo application
+        var app = new p2.WebGLRenderer(function(){
+
+            var physicsToDOMScale = 200; // Multiply physics coordinate with this and you get the number of pixels in the dom
+
+            // Create physics world
+            var world = new p2.World({
+                gravity : [0,-10]
+            });
+
+            this.setWorld(world);
+
+            world.solver.iterations = 100;
+            world.solver.tolerance = 0.001;
+
+            // Create two circles
+            var bodyA = new p2.Body({
+                mass: 5,
+                position: [-1, 1],
+            });
+            bodyA.addShape(new p2.Circle({ radius: 0.5 }));
+            world.addBody(bodyA);
+            var bodyB = new p2.Body({
+                mass: 5,
+                position: [1, 1],
+            });
+            bodyB.addShape(new p2.Circle({ radius: 0.5 }));
+            world.addBody(bodyB);
+
+            // Create constraint.
+            // This will lock bodyB to bodyA
+            var constraint = new p2.LockConstraint(bodyA, bodyB);
+            world.addConstraint(constraint);
+
+            //Set style of html elements
+            elements = document.querySelectorAll('.p2-dynamic-body');
+            for(var i=0; i<elements.length; i++){
+              var element = elements[i];
+              element.style.position = 'absolute';
+              element.style.top = 0;
+              element.style.left = 0;
+              element.style.transformOrigin = '50% 50%';
+            }
+
+            // Create a beam made of locked rectangles
+            var r = 1,
+                lastBody,
+                N = 10;
+            bodies = [];
+            for(var i=0; i<N; i++){
+                var body = new p2.Body({
+                    mass:1,
+                    position:[i*0.5*r - N*0.5*r/2,3]
+                });
+                body.addShape(new p2.Box({ width: 0.5, height: 0.5 }));
+                world.addBody(body);
+                bodies.push(body);
+                if(lastBody){
+                    // Connect current body to the last one
+                    var constraint = new p2.LockConstraint(lastBody, body, {
+                        collideConnected : false
+                    });
+                    world.addConstraint(constraint);
+                }
+                lastBody = body;
+            }
+            // Create ground
+            var planeShape = new p2.Plane();
+            var plane = new p2.Body({
+                position : [0,-2],
+            });
+            plane.addShape(planeShape);
+            world.addBody(plane);
+
+            //Create wall
+            planeShape01 = new p2.Plane();
+            plane01 = new p2.Body({
+                position : [0,1],
+            });
+            plane01.addShape(planeShape01);
+            world.addBody(plane01);
+
+            //
+
+            world.on("postStep", function(){
+            updateTransforms();
+            });
+
+            // Update all element transforms
+            function updateTransforms(){
+
+              // Update dynamic bodies
+              for ( i = 0; i < elements.length; i++ ) {
+                var body = bodies[i];
+                var element = elements[i];
+                updateTransform(body, element);
+              }
+            }
+
+            function updateTransform(body, element){
+               // Convert physics coordinates to pixels
+                var x = physicsToDOMScale * (body.interpolatedPosition[0] + 2.25 - body.shapes[0].width/2);
+                var y = -physicsToDOMScale * (body.interpolatedPosition[1] - 2.75 + body.shapes[0].height/2);
+
+                // Set element style
+                var style = 'translate(' + x + 'px, ' + y + 'px) rotate(' + (-body.interpolatedAngle * 57.2957795) + 'deg)';
+                element.style.WebkitTransform = style + ' translateZ(0)'; // Force HW Acceleration
+
+            }
+        });
+
+    </script>
+</body>
+</html>
