@@ -77,7 +77,7 @@
                     angle: 0
                 };
 
-        ////////////// UTIL ////////////////////
+        ////////////// Vector ////////////////////
 
         function Vector(components) {
           this.arr = components;
@@ -145,21 +145,21 @@
             //Add chain of particles
             this.particles = [];
             this.locks = [];
+
+            //Create a position for the first element
+            //by using the distanceVector * the number of particles
             var vDistance = this._parentDistanceVector();
             var vPos = new Vector(this.position);
             vPos = vPos.add((vDistance.multiply(this.particleCount)));
-            //var posX = this.position[0] + (this.particleCount * vDistance.arr[0])
-            //posY = this.position[1] + (this.particleCount * this.particleHeight);
+
             for(var i=0; i<this.particleCount; i++){
                 if(typeof lastBody != 'undefined') {
                     var vLastPos = new Vector(lastBody.position);
                     vPos = vLastPos.subtract(vDistance);
-                    //posY = lastBody.position[1] - lastBody.shapes[0].height;
                 }
 
                 var particle = new Particle( { 
                     position: vPos.arr,
-                    //position: [this.position[0], posY], 
                     angle: this.angle,
                     width: this.particleWidth, 
                     txt: i
@@ -191,8 +191,6 @@
             return this.particles[i].boxBody;
         }
 
-        // Get a normalized vector of the direction between particle 0 and 1
-        // Useful when adding a new branch to the tree
         Chain.prototype._distanceVector = function() {
             if (this.particles.length == 0) {
                 var vDir = new Vector([0, this.particleHeight]);
@@ -206,6 +204,9 @@
             return vDir;
         }  
 
+        // Get a normalized vector of the direction between particle 0 and 1
+        // Useful when adding a new branch to the tree.
+        // It can be used to create the position of the new particles
         Chain.prototype._parentDistanceVector = function() {
             if (typeof sugarWorld.tree[this.id].parent == 'undefined')
                 return new Vector([0, this.particleHeight]); 
@@ -235,20 +236,18 @@
             this.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
         }
 
-        Chain.prototype.resetProperties = function() {
-            this.getLastParticle().dockedState = "none";
-            this.getLastParticle().attractionForce = [0,0];
-        }
+        // Chain.prototype.getChildrenIds = function() {
+        //     var childrenArr = [];
+        //     var thisId = this.id;
+        //     sugarWorld.tree.forEach(function(el, i) {
+        //         if (typeof el.parent != 'undefined' && el.parent == thisId)
+        //             childrenArr.push(i);
+        //     });
+        //     return childrenArr;
+        // }
 
         Chain.prototype.update = function() {
             this.setDebugColors();
-
-            // var p = this.getLastParticle();
-
-            // //Update force on the particle
- 
-            // p.boxBody.force[0] = p.attractionForce[0];
-            // p.boxBody.force[1] = p.attractionForce[1];
 
             //Transfer positions of the physics objects to Pixi.js graphic elements
             for (var i = 0; i < this.particles.length; i++) {
@@ -280,11 +279,9 @@
             this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
             this.velocity       = !Array.isArray(settings.velocity)             ? [0, 0]    : settings.velocity;
             this.static         = typeof settings.static == 'undefined'         ? false     : settings.static;
-            this.isAttractor    = typeof settings.isAttractor == 'undefined'    ? false     : settings.isAttractor;
             this.angle          = typeof settings.angle == 'undefined'          ? 0         : settings.angle;
 
             this.dockedState = "none";
-            this.attractionForce = [0,0];
              // Add a box
             this.addPhysicsBody();
             this.drawBox();
@@ -341,69 +338,6 @@
             this.graphics.rotation =   this.boxBody.angle;
         }
 
-        Particle.prototype.updateAttractionAndDocking = function() {
-            var attractor = this;
-
-            //Reset properties
-            attractor.attracts = [];
-            attractor.dock = [];
-
-            //Measure distance from attractor to all chains and add to attracts property
-            sugarWorld.chains.forEach(function(chain) {
-                var d = sugarWorld.distanceBetween(chain.getLastParticle(), attractor);
-                attractor.attracts.push({distance: d, chain: chain});
-            });
-
-            // if distance is smaller than 0.5 add to docked property
-            // do not add if chain is already docked to another attractor
-            attractor.attracts.forEach(function(el){
-                if (el.distance < 1.5 && el.chain.getLastParticle().dockedState == "none") {
-                    attractor.dock.push(el);
-                }
-            })
-
-           // Sort docked property by distance
-            attractor.dock.sort(function(a, b) {
-                return parseFloat(a.distance) - parseFloat(b.distance);
-            });
-
-            // trim docked to two elements
-            attractor.dock = attractor.dock.slice(0, attractor.dockSlots);
-
-           // set docked property on particle
-            attractor.dock.forEach(function(el) {
-                el.chain.getLastParticle().dockedState = "docked";
-            });
-
-            // Sort docked chains by id
-            attractor.dock.sort(function(a, b) {
-                return a.chain.id - b.chain.id;
-            });
-
-            // Lock the end particle in place so that it sits on top of the attractor
-            attractor.dock.forEach(function(el, i) {
-                var p = el.chain.getLastParticle();
-                //Offset the first docked element to the left and the second element to the right
-                var offsetX = i == 0 ? -0.15 : 0.15;
-                var offsetAngle = i == 0 ? Math.PI / 8 : - (Math.PI / 8);
-                p.boxBody.position[0] = attractor.boxBody.position[0] + offsetX;
-                p.boxBody.position[1] = attractor.boxBody.position[1] + 0.2;
-                p.boxBody.angle = offsetAngle;
-                p.boxBody.velocity = [0,0];         
-            });
-
-            //Set the attractionForce on all chains
-            //There is only attraction if the dock is not full
-            if (typeof attractor.dock != 'undefined' && attractor.dock.length == attractor.dockSlots) {
-                //do nothing
-            }
-            else {
-                sugarWorld.chains.forEach(function(chain) {
-                    sugarWorld.addForce(chain.getLastParticle(), attractor);
-                });
-            }
-        }
-
 // WALLS
 
         function addWalls(settings) {
@@ -445,44 +379,6 @@
         }
 
         //////////////// MY SCENE //////////////////
-
-        sugarWorld.distanceBetween = function(particleA,particleB){
-            if (particleA != null && particleB != null) {
-                var dx = particleA.boxBody.position[0] - particleB.boxBody.position[0];  //distance between bodies
-                var dy = particleA.boxBody.position[1] - particleB.boxBody.position[1];  
-                var dist = Math.sqrt(dx*dx + dy*dy);     //pythagoras ^^  (get the distance to each other)
-                return dist;
-            }
-            else
-                return null;
-        }
-
-        sugarWorld.accelerateToObject = function(particle1, particle2, speed) {
-            if (typeof speed === 'undefined') { 
-                speed = 2;
-            }
-
-            if (typeof particle2 != 'undefined' && particle2 != null) {
-                var angle = Math.atan2(particle2.boxBody.position[1] - particle1.boxBody.position[1], particle2.boxBody.position[0] - particle1.boxBody.position[0]);
-                particle1.boxBody.rotation = angle + Math.PI;  // correct angle if wanted    
-                particle1.boxBody.force[0] = Math.cos(angle) * speed;    // accelerateToObject     
-                particle1.boxBody.force[1] = Math.sin(angle) * speed;
-            }
-        }
-
-
-        sugarWorld.addForce = function(particle1, particle2, speed) {
-            if (typeof speed === 'undefined') { 
-                speed = 2;
-            }
-
-            if (typeof particle2 != 'undefined' && particle2 != null) {
-                var angle = Math.atan2(particle2.boxBody.position[1] - particle1.boxBody.position[1], particle2.boxBody.position[0] - particle1.boxBody.position[0]);
-                particle1.boxBody.rotation = angle + Math.PI;  // correct angle if wanted    
-                particle1.attractionForce[0] += Math.cos(angle) * speed;    // accelerateToObject     
-                particle1.attractionForce[1] += Math.sin(angle) * speed;
-            }
-        }        
 
         sugarWorld.createChain = function() {
             var particleCount = 7;
@@ -533,7 +429,8 @@
                 var p = chain.getLastParticle();
                 var position = sugarWorld.getDockPosition(chain.id);
                 //TO-DO set angle of dock
-                //var angle = sugarWorld.tree[chain.id].angle;
+                //vDirection = chain.getParentDirectionVector
+                //var angle = convertdirectionToRadians + sugarWorld.tree[chain.id].angle;
 
                 p.boxBody.position = position;
                 //p.boxBody.angle = angle;
@@ -547,10 +444,6 @@
             if(keyCode==48) {
                 sugarWorld.createChain();
             }
-            //Debug particles on 'x'
-            else if (keyCode = 88) {
-                 sugarWorld.debugLastParticles();
-            }
             else
                 console.log("keyCode", e.keyCode);
         }
@@ -562,20 +455,11 @@
                 position: position, 
                 static: true,
                 width: 0.2, 
-                txt: "o",
-                isAttractor: true
+                txt: "o"
             });
-            //attractor.dockSlots = 2;
 
             sugarWorld.attractors.push(attractor);
             return position;
-        }
-
-        sugarWorld.debugLastParticles = function() {
-            sugarWorld.chains.forEach(function(chain) {
-                var p = chain.getLastParticle();
-                console.log("lastParticle",p);
-            });
         }
 
     // init
@@ -637,18 +521,12 @@
 
 //
 
-            sugarWorld.chains.forEach(function(chain) {
-                 chain.resetProperties();
-            })
-
-
-            //Fill the docks on all attractors
+            //Fill the docks on all attractors and set their positions
             sugarWorld.attractors.forEach(function(attractor) {
-                //attractor.updateAttractionAndDocking();
                 sugarWorld.updateDocking();
             });
 
-            //Apply forces, colors etc
+            //Apply colors etc
             sugarWorld.chains.forEach(function(chain) {
                 chain.update();
             });
