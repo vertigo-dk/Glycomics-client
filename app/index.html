@@ -147,11 +147,23 @@
             this.particles = [];
             this.locks = [];
 
-            //Create a position for the first element
-            //by using the distanceVector * the number of particles
+            //
+
             var vDistance = this._parentDistanceVector();
             var vPos = new Vector(this.position);
+
+            //rotate the distance vector by the radians specified in the tree
+             var treeAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
+             if (treeAngle != 0) {
+                 var newDistance = sugarWorld.rotatePoint(0, 0, vDistance.arr[0], vDistance.arr[1], treeAngle);
+                 vDistance.arr = newDistance;
+             }
+
+            //Create a position for the first element
+            //by using the distanceVector * the number of particles
             vPos = vPos.add((vDistance.multiply(this.particleCount)));
+
+            //
 
             for(var i=0; i<this.particleCount; i++){
                 if(typeof lastBody != 'undefined') {
@@ -205,7 +217,8 @@
             return vDir;
         }  
 
-        // Get a normalized vector of the direction between particle 0 and 1
+        // Get a vector of the direction and distance between particle 0 and 1
+        // in the parent chain
         // Useful when adding a new branch to the tree.
         // It can be used to create the position of the new particles
         Chain.prototype._parentDistanceVector = function() {
@@ -392,10 +405,24 @@
                 });
             sugarWorld.chains.push(chain);
 
+            //Move the last particle in the chain a bit to the side and rotate it
+            // if (sugarWorld.tree[sugarWorld.treeIndex].angle != 0)
+            //     sugarWorld.offsetDock(chain);
             sugarWorld.createLockToParent(chain, 100000, 1);
 
             sugarWorld.treeIndex++;
         }
+
+        // sugarWorld.offsetDock = function(chain) {
+        //     //get the last body of the chain
+        //     var body = chain.getLastBody();
+        //     //add the angle from the tree
+        //     var newAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
+        //     body.angle += newAngle;
+        //     //Find distance vector
+        //     //get normalized tangent vector of that vector
+        //     //move the body particleWidth * tangent
+        // }
 
         sugarWorld.getDockPosition = function(i) {
             if (i == 0) {
@@ -412,34 +439,13 @@
 
         sugarWorld.getDockAngle = function(i) {
                 if (i == 0)
-                    return 0;
-                var parentIndex = sugarWorld.tree[i].parent;
-                var chain = sugarWorld.chains[parentIndex];
-                return chain.getFirstParticle().boxBody.angle;
-        }
+                     return sugarWorld.tree[i].angle;
 
-        // sugarWorld.updateDocking = function() {
-        //     sugarWorld.chains.forEach(function(chain) {
-        //         var p = chain.getLastParticle();
-        //         var position = sugarWorld.getDockPosition(chain.id);
-        //         //TO-DO set angle of dock
-        //         //vDirection = chain.getParentDirectionVector
-        //         //var angle = convertdirectionToRadians + sugarWorld.tree[chain.id].angle;
 
-        //         p.boxBody.position = position;
-        //         //p.boxBody.angle = angle;
-        //         p.boxBody.velocity = [0,0];
-        //     });       
-        // }
-
-        sugarWorld.onKeyDown = function(e, pos) {
-            var keyCode = e.keyCode;
-            //Create treeAttractor on keypress '0'
-            if(keyCode==48) {
-                sugarWorld.createChain();
-            }
-            else
-                console.log("keyCode", e.keyCode);
+                // //Get the angle of the parent
+                 var parentIndex = sugarWorld.tree[i].parent;
+                 var chain = sugarWorld.chains[parentIndex];
+                 return chain.getFirstParticle().boxBody.angle;
         }
 
         sugarWorld.createNewAttractor = function() {
@@ -485,6 +491,16 @@
             return constraint;
         }
 
+        // The first two parameters are the X and Y coordinates of 
+        // the central point, x and y the point to rotate
+        sugarWorld.rotatePoint = function(cx, cy, x, y, radians) {    
+            cos = Math.cos(radians),
+            sin = Math.sin(radians),
+            nx = (cos * (x - cx)) + (sin * (y - cy)) + cx,
+            ny = (cos * (y - cy)) - (sin * (x - cx)) + cy;
+            return [nx, ny];
+         }
+
     // init
 
         init();
@@ -527,6 +543,9 @@
     //  
 
             var pos = sugarWorld.createNewAttractor();
+            while (sugarWorld.treeIndex < sugarWorld.tree.length) {
+                sugarWorld.createChain();                
+            }
 
 
             document.addEventListener("keydown", function(e) {
