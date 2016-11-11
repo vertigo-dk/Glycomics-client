@@ -132,8 +132,7 @@
             this.particleHeight = typeof settings.particleWidth == 'undefined'  ? 0.2       : settings.particleHeight;
             this.stiffness      = typeof settings.stiffness == 'undefined'      ? 10        : settings.stiffness;
             this.relaxation     = typeof settings.relaxation == 'undefined'     ? 40        : settings.relaxation;
-            this.fontFamily     = typeof settings.fontFamily == 'undefined'     ? 'Arial'   : settings.fontFamily;
-            this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
+            this.font           = typeof settings.font == 'undefined'           ? 'bold 12pt Arial'   : settings.font;
             this.angle          = typeof settings.angle == 'undefined'          ? 0         : settings.angle;
 
             this.createChain();
@@ -155,7 +154,7 @@
             //rotate the distance vector by the radians specified in the tree
              var treeAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
              if (treeAngle != 0) {
-                 var newDistance = sugarWorld.rotatePoint(0, 0, vDistance.arr[0], vDistance.arr[1], treeAngle);
+                 var newDistance = sugarWorld.rotatePoint(0, 0, vDistance.arr[0], vDistance.arr[1], -treeAngle);
                  vDistance.arr = newDistance;
              }
 
@@ -174,7 +173,9 @@
                 var particle = new Particle( { 
                     position: vPos.arr,
                     angle: this.angle,
-                    width: this.particleWidth, 
+                    width: this.particleWidth,
+                    height: this.particleHeight,
+                    fontSize: this.fontSize,
                     txt: i
                 });
                 this.particles.push(particle);
@@ -280,7 +281,7 @@
             this.height         = typeof settings.height == 'undefined'         ? 0.2       : settings.height;
             this.position       = !Array.isArray(settings.position)             ? [-5, 0]   : settings.position;
             this.txtString      = typeof settings.txt == 'undefined'            ? "x"       : settings.txt;
-            this.fontFamily     = typeof settings.fontFamily == 'undefined'     ? 'Arial'   : settings.fontFamily;
+            this.font           = typeof settings.font == 'undefined'           ? 'bold 12pt Arial'   : settings.font;
             this.fontSize       = typeof settings.fontSize == 'undefined'       ? 24        : settings.fontSize;
             this.velocity       = !Array.isArray(settings.velocity)             ? [0, 0]    : settings.velocity;
             this.static         = typeof settings.static == 'undefined'         ? false     : settings.static;
@@ -316,10 +317,10 @@
             container.addChild(this.graphics);
 
             // Add text to box
-            this.txtObject = new PIXI.Text(this.txtString, {fontFamily : this.fontFamily, fontSize: this.fontSize, fill : 0x001010, align : 'center'});
+            this.txtObject = new PIXI.Text(this.txtString, {font: this.font, align : 'center'});
             this.txtObject.scale.x = 1/zoom;
             this.txtObject.scale.y = -1/zoom;
-            this.txtObject.position.x = this.boxShape.height;
+            this.txtObject.position.x = this.boxShape.height/2;
             this.txtObject.position.y = this.boxShape.width/2;
             this.txtObject.rotation = - Math.PI / 2;
             this.graphics.addChild(this.txtObject);
@@ -387,11 +388,11 @@
 
         sugarWorld.createChain = function() {
             var particleCount = 7;
-            var particleWidth = 0.3;
-            var particleHeight = 0.2;
+            var particleWidth = 0.15;
+            var particleHeight = 0.15;
 
             var position = sugarWorld.getDockPosition(sugarWorld.treeIndex);
-            var angle = sugarWorld.getDockAngle(sugarWorld.treeIndex);
+            var angle = sugarWorld.tree[sugarWorld.treeIndex].angle; //sugarWorld.getDockAngle(sugarWorld.treeIndex);
 
             var chain = new Chain({
                     id: sugarWorld.treeIndex,
@@ -401,7 +402,8 @@
                     particleHeight: particleHeight,
                     stiffness: 100000,
                     relaxation: 1,
-                    angle: angle
+                    angle: angle,
+                    font: 'bold 14pt Arial'
                 });
             sugarWorld.chains.push(chain);
 
@@ -409,8 +411,6 @@
             // if (sugarWorld.tree[sugarWorld.treeIndex].angle != 0)
             //     sugarWorld.offsetDock(chain);
             sugarWorld.createLockToParent(chain, 100000, 1);
-
-            sugarWorld.treeIndex++;
         }
 
         // sugarWorld.offsetDock = function(chain) {
@@ -427,7 +427,6 @@
         sugarWorld.getDockPosition = function(i) {
             if (i == 0) {
                 var pos = [sugarWorld.tree[0].pos[0], sugarWorld.tree[0].pos[1]];
-                //pos[1] += 0.2;
                 return pos;
             } 
             else {
@@ -454,8 +453,10 @@
             var attractor = new Particle( { 
                 position: position, 
                 static: true,
-                width: 0.2, 
-                txt: "o"
+                width: 0.15,
+                height: 0.15, 
+                txt: "o",
+                fontSize: 12
             });
 
             sugarWorld.attractors.push(attractor);
@@ -515,7 +516,7 @@
             world.gravity = [0,0];
             world.defaultContactMaterial.friction = 0.0;
 
-            addWalls({ topLeft: [-6, 3.5], bottomRight: [6, -3.5] });
+            //addWalls({ topLeft: [-6, 3.5], bottomRight: [6, -3.5] });
 
     //PIXI
 
@@ -523,7 +524,7 @@
             zoom = 100;
 
             // Initialize the stage
-            renderer =  PIXI.autoDetectRenderer(1200, 800),
+            renderer =  PIXI.autoDetectRenderer(1200, 1200),
             stage = new PIXI.Stage(0xbbbbbb);
 
             // We use a container inside the stage for all our content
@@ -543,10 +544,6 @@
     //  
 
             var pos = sugarWorld.createNewAttractor();
-            while (sugarWorld.treeIndex < sugarWorld.tree.length) {
-                sugarWorld.createChain();                
-            }
-
 
             document.addEventListener("keydown", function(e) {
                 sugarWorld.onKeyDown(e, pos);
@@ -572,6 +569,11 @@
             sugarWorld.chains.forEach(function(chain) {
                 chain.update();
             });
+
+            if (sugarWorld.treeIndex < sugarWorld.tree.length) {
+                sugarWorld.createChain(); 
+                sugarWorld.treeIndex++;               
+            }
 
             // Render scene
             renderer.render(stage);
