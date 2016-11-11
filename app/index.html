@@ -3,80 +3,117 @@
   <head>
     <title>p2.js and Pixi.js example</title>
     <meta charset="utf-8">
-    <script src="../p2js/demos/js/pixi.js"></script>
-    <script src="../p2js/build/p2.js"></script>
+    <script src="../../node_modules/p2/demos/js/pixi.js"></script>
+    <script src="../../node_modules/p2/build/p2.js"></script>
   </head>
   <body>
+      <h1 id="title"></h1>
+      <script src="/socket.io/socket.io.js"></script>
+       <script>
+       var sugarWorld = {};
+       sugarWorld.attractors = [];
+       sugarWorld.chains = [];
+       sugarWorld.treeIndex = 0;
+       sugarWorld.locks = [];
+       sugarWorld.tree = [];
 
-    <script>
+       var startPos = [0, -3.5];
+
+
+      var currentLocation = window.location;
+      var socket = io.connect('http://' + currentLocation.hostname + ':8080');
+      socket.on('connect', function() {
+          socket.emit('updateContent', {});
+      });
+
+      var content;
+
+      socket.on('article', function(article) {
+          content = article;
+          console.log(content);
+          sugarWorld.tree = content.tree;
+
+          if (article.title.length > 0) {
+              document.getElementById("title").innerHTML = content.title;
+          } else {
+              document.getElementById("title").innerHTML = "<p> no server found  </p>";
+          };
+      });
+
+
+
         var renderer, stage, container, graphics, zoom,
             world;
 
-        var sugarWorld = {};
-        sugarWorld.attractors = [];
-        sugarWorld.chains = [];
-        sugarWorld.treeIndex = 0;
-        sugarWorld.locks = [];
+            // Converts from degrees to radians.
+            Math.radians = function(degrees) {
+              return degrees * Math.PI / 180;
+            };
+
+            // Converts from radians to degrees.
+            Math.degrees = function(radians) {
+              return radians * 180 / Math.PI;
+            };
 
         //////////// TREE //////////////////////
 
-        sugarWorld.tree = [];
-        sugarWorld.tree[0] = {
-                    pos: [0, -3.5],
-                    angle: 0
-                };
-        sugarWorld.tree[1] = {
-                    parent: 0,
-                    angle: 0
-                };
-        sugarWorld.tree[2] = {
-                    parent: 1,
-                    angle: 0
-                };
-        sugarWorld.tree[3] = {
-                    parent: 2,
-                    angle: -Math.PI / 8
-                };
-        sugarWorld.tree[4] = {
-                    parent: 2,
-                    angle: Math.PI / 8
-                };
-        sugarWorld.tree[5] = {
-                    parent: 3,
-                    angle: -Math.PI / 8       
-                };
-        sugarWorld.tree[6] = {
-                    parent: 3,
-                    angle: 0
-                };
-        sugarWorld.tree[7] = {
-                    parent: 4,
-                    angle: 0
-                };
-        sugarWorld.tree[8] = {
-                    parent: 5,
-                    angle: 0
-                };
-        sugarWorld.tree[9] = {
-                    parent: 6,
-                    angle: 0
-                };
-        sugarWorld.tree[10] = {
-                    parent: 7,
-                    angle: 0
-                };
-        sugarWorld.tree[11] = {
-                    parent: 8,
-                    angle: 0
-                };
-        sugarWorld.tree[12] = {
-                    parent: 9,
-                    angle: 0
-                };
-        sugarWorld.tree[13] = {
-                    parent: 10,
-                    angle: 0
-                };
+        //sugarWorld.tree = [];
+        // sugarWorld.tree[0] = {
+        //             pos: [0, -3.5],
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[1] = {
+        //             parent: 0,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[2] = {
+        //             parent: 1,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[3] = {
+        //             parent: 2,
+        //             angle: -Math.PI / 8
+        //         };
+        // sugarWorld.tree[4] = {
+        //             parent: 2,
+        //             angle: Math.PI / 8
+        //         };
+        // sugarWorld.tree[5] = {
+        //             parent: 3,
+        //             angle: -Math.PI / 8
+        //         };
+        // sugarWorld.tree[6] = {
+        //             parent: 3,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[7] = {
+        //             parent: 4,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[8] = {
+        //             parent: 5,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[9] = {
+        //             parent: 6,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[10] = {
+        //             parent: 7,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[11] = {
+        //             parent: 8,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[12] = {
+        //             parent: 9,
+        //             angle: 0
+        //         };
+        // sugarWorld.tree[13] = {
+        //             parent: 10,
+        //             angle: 0
+        //         };
 
         ////////////// Vector ////////////////////
 
@@ -165,7 +202,7 @@
                     vPos = vLastPos.add(vOffset);
                 }
 
-                var particle = new Particle( { 
+                var particle = new Particle( {
                     type: particleType,
                     position: vPos.arr,
                     angle: this.angle,
@@ -175,7 +212,7 @@
                     txt: i
                 });
                 this.particles.push(particle);
-                
+
                 if(typeof lastBody != 'undefined'){
                     this._createConstraint(particle.boxBody, lastBody);
                 }
@@ -189,7 +226,7 @@
             var vOffset = new Vector([0, this.particleHeight]); // Vector that indicates the offset from the parent
 
             //rotate the distance vector by the radians specified in the tree
-             var treeAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
+             var treeAngle = Math.radians(sugarWorld.tree[sugarWorld.treeIndex].angle);
              if (treeAngle != 0) {
                  var newOffset = sugarWorld.rotatePoint(0, 0, vOffset.arr[0], vOffset.arr[1], -treeAngle);
                  vOffset.arr = newOffset;
@@ -224,7 +261,7 @@
                 var vDir = v0.subtract(v1);
             }
             return vDir;
-        }  
+        }
 
         // Get a vector of the direction and distance between particle 0 and 1
         // in the parent chain
@@ -232,7 +269,7 @@
         // It can be used to create the position of the new particles
         Chain.prototype._parentDistanceVector = function() {
             if (typeof sugarWorld.tree[this.id].parent == 'undefined')
-                return new Vector([0, this.particleHeight]); 
+                return new Vector([0, this.particleHeight]);
             else {
                 var parentIndex = sugarWorld.tree[this.id].parent;
                 var parent = sugarWorld.chains[parentIndex];
@@ -243,7 +280,7 @@
         Chain.prototype.getNewDockPosition = function() {
             var body0 = this.getLastBody(); //this.getBodyAt(0);
             return [body0.position[0], body0.position[1]];
-        } 
+        }
 
         Chain.prototype._createConstraint = function(body, lastBody) {
             var constraint = sugarWorld.lockConstraint(body, lastBody, this.stiffness, this.relaxation);
@@ -297,7 +334,7 @@
                 this.boxShape = new p2.Box({ width: this.width, height: this.height });
             else if (this.type == 'circle')
                 this.boxShape = new p2.Circle({ radius: this.width/1.5});
-            
+
             this.boxBody = new p2.Body({
                 mass:!this.static,
                 fixedRotation: this.static,
@@ -341,7 +378,7 @@
 
         Particle.prototype.drawCircle = function(col) {
             this.graphics.beginFill(col);
-            this.graphics.drawCircle(0, 0, this.boxShape.radius)            
+            this.graphics.drawCircle(0, 0, this.boxShape.radius)
         }
 
         Particle.prototype.update = function() {
@@ -404,12 +441,12 @@
             var particleHeight = 0.15;
 
             var position = sugarWorld.getDockPosition(sugarWorld.treeIndex);
-            var angle = sugarWorld.tree[sugarWorld.treeIndex].angle; //sugarWorld.getDockAngle(sugarWorld.treeIndex);
+            var angle = Math.radians(sugarWorld.tree[sugarWorld.treeIndex].angle); //sugarWorld.getDockAngle(sugarWorld.treeIndex);
 
             var chain = new Chain({
                     id: sugarWorld.treeIndex,
-                    position: position, 
-                    particleCount: particleCount, 
+                    position: position,
+                    particleCount: particleCount,
                     particleWidth: particleWidth,
                     particleHeight: particleHeight,
                     stiffness: 100000,
@@ -427,9 +464,9 @@
 
         sugarWorld.getDockPosition = function(i) {
             if (i == 0) {
-                var pos = [sugarWorld.tree[0].pos[0], sugarWorld.tree[0].pos[1]];
+                var pos = startPos;//[sugarWorld.tree[0].pos[0], sugarWorld.tree[0].pos[1]];
                 return pos;
-            } 
+            }
             else {
                 var parentIndex = sugarWorld.tree[i].parent;
                 var chain = sugarWorld.chains[parentIndex];
@@ -439,7 +476,7 @@
 
         sugarWorld.getDockAngle = function(i) {
                 if (i == 0)
-                     return sugarWorld.tree[i].angle;
+                     return Math.radians(sugarWorld.tree[i].angle);
 
 
                 // //Get the angle of the parent
@@ -449,13 +486,13 @@
         }
 
         sugarWorld.createNewAttractor = function() {
-            var position = sugarWorld.tree[0].pos;
+            var position = startPos;//sugarWorld.tree[0].pos;
 
-            var attractor = new Particle( { 
-                position: position, 
+            var attractor = new Particle( {
+                position: position,
                 static: true,
                 width: 0.15,
-                height: 0.15, 
+                height: 0.15,
                 txt: "o",
                 fontSize: 12
             });
@@ -493,9 +530,9 @@
             return constraint;
         }
 
-        // The first two parameters are the X and Y coordinates of 
+        // The first two parameters are the X and Y coordinates of
         // the central point, x and y the point to rotate
-        sugarWorld.rotatePoint = function(cx, cy, x, y, radians) {    
+        sugarWorld.rotatePoint = function(cx, cy, x, y, radians) {
             cos = Math.cos(radians),
             sin = Math.sin(radians),
             nx = (cos * (x - cx)) + (sin * (y - cy)) + cx,
@@ -542,7 +579,7 @@
             container.scale.x =  zoom;  // zoom in
             container.scale.y = -zoom; // Note: we flip the y axis to make "up" the physics "up"
 
-    //  
+    //
 
             var pos = sugarWorld.createNewAttractor();
 
@@ -564,8 +601,8 @@
             });
 
             if (sugarWorld.treeIndex < sugarWorld.tree.length) {
-                sugarWorld.createChain(); 
-                sugarWorld.treeIndex++;               
+                sugarWorld.createChain();
+                sugarWorld.treeIndex++;
             }
 
             // Render scene
