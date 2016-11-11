@@ -148,29 +148,25 @@
 
             //
 
-            var vDistance = this._parentDistanceVector();
+            var vOffset = this.calculateOffset();
             var vPos = new Vector(this.position);
 
-            //rotate the distance vector by the radians specified in the tree
-             var treeAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
-             if (treeAngle != 0) {
-                 var newDistance = sugarWorld.rotatePoint(0, 0, vDistance.arr[0], vDistance.arr[1], -treeAngle);
-                 vDistance.arr = newDistance;
-             }
-
             //Create a position for the first element
-            //by using the distanceVector * the number of particles
-            vPos = vPos.add((vDistance.multiply(this.particleCount)));
+            //by using the offsetVector * the number of particles
+            vPos = vPos.add((vOffset.multiply(this.particleCount)));
 
             //
 
             for(var i=0; i<this.particleCount; i++){
+                var particleType = i == 0 ? 'circle' : 'text';
+
                 if(typeof lastBody != 'undefined') {
                     var vLastPos = new Vector(lastBody.position);
-                    vPos = vLastPos.subtract(vDistance);
+                    vPos = vLastPos.subtract(vOffset);
                 }
 
                 var particle = new Particle( { 
+                    type: particleType,
                     position: vPos.arr,
                     angle: this.angle,
                     width: this.particleWidth,
@@ -187,6 +183,18 @@
             }
             //Set initial velocity of the last particle.
             this.getLastBody().velocity = this.velocity;
+        }
+
+        Chain.prototype.calculateOffset = function() {
+            var vOffset = new Vector([0, this.particleHeight]); // Vector that indicates the offset from the parent
+
+            //rotate the distance vector by the radians specified in the tree
+             var treeAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
+             if (treeAngle != 0) {
+                 var newOffset = sugarWorld.rotatePoint(0, 0, vOffset.arr[0], vOffset.arr[1], -treeAngle);
+                 vOffset.arr = newOffset;
+             }
+             return vOffset;
         }
 
         Chain.prototype.getLastBody = function() {
@@ -265,10 +273,10 @@
             p = this.getLastParticle();
             switch(p.dockedState) {
                 case "none":
-                    p.setBoxColor(0xff0000);
+                    p.drawRectangle(0xff0000);
                     break;
                 case "docked":
-                    p.setBoxColor(0x0000ff);
+                    p.drawRectangle(0x0000ff);
                     break;
             }
         }
@@ -277,6 +285,7 @@
 
         //A Particle is an element of with a physics body and some pixi graphics (a character)
         var Particle = function(settings) {
+            this.type           = typeof settings.type == 'undefined'           ? 'text'    : settings.type;
             this.width          = typeof settings.width == 'undefined'          ? 0.2       : settings.width;
             this.height         = typeof settings.height == 'undefined'         ? 0.2       : settings.height;
             this.position       = !Array.isArray(settings.position)             ? [-5, 0]   : settings.position;
@@ -294,7 +303,11 @@
         }
 
         Particle.prototype.addPhysicsBody = function () {
-            this.boxShape = new p2.Box({ width: this.width, height: this.height });
+            if (this.type == 'text')
+                this.boxShape = new p2.Box({ width: this.width, height: this.height });
+            else if (this.type == 'circle')
+                this.boxShape = new p2.Circle({ radius: this.width/1.5});
+            
             this.boxBody = new p2.Body({
                 mass:!this.static,
                 fixedRotation: this.static,
@@ -311,7 +324,11 @@
         Particle.prototype.drawBox = function () {
             // Draw the box.
             this.graphics = new PIXI.Graphics();
-            this.setBoxColor(0xff0000);
+            if (this.type == 'text')
+                this.drawRectangle(0xff0000);
+            else if (this.type == 'circle')
+                this.drawCircle(0xff0000);
+
 
             // Add the box to our container
             container.addChild(this.graphics);
@@ -320,16 +337,21 @@
             this.txtObject = new PIXI.Text(this.txtString, {font: this.font, align : 'center'});
             this.txtObject.scale.x = 1/zoom;
             this.txtObject.scale.y = -1/zoom;
-            this.txtObject.position.x = this.boxShape.height/2;
-            this.txtObject.position.y = this.boxShape.width/2;
+            this.txtObject.position.x = this.boxShape.height/2 || this.boxShape.radius;
+            this.txtObject.position.y = this.boxShape.width/2 || this.boxShape.radius/2;
             this.txtObject.rotation = - Math.PI / 2;
             this.graphics.addChild(this.txtObject);
             this.moveGraphics();
         }
 
-        Particle.prototype.setBoxColor = function(col) {
+        Particle.prototype.drawRectangle = function(col) {
             this.graphics.beginFill(col);
             this.graphics.drawRect(-this.boxShape.width/2, -this.boxShape.height/2, this.boxShape.width, this.boxShape.height);
+        }
+
+        Particle.prototype.drawCircle = function(col) {
+            this.graphics.beginFill(col);
+            this.graphics.drawCircle(0, 0, this.boxShape.radius)            
         }
 
         Particle.prototype.update = function() {
@@ -412,17 +434,6 @@
             //     sugarWorld.offsetDock(chain);
             sugarWorld.createLockToParent(chain, 100000, 1);
         }
-
-        // sugarWorld.offsetDock = function(chain) {
-        //     //get the last body of the chain
-        //     var body = chain.getLastBody();
-        //     //add the angle from the tree
-        //     var newAngle = sugarWorld.tree[sugarWorld.treeIndex].angle;
-        //     body.angle += newAngle;
-        //     //Find distance vector
-        //     //get normalized tangent vector of that vector
-        //     //move the body particleWidth * tangent
-        // }
 
         sugarWorld.getDockPosition = function(i) {
             if (i == 0) {
@@ -513,7 +524,7 @@
 
             // Init p2.js
             world = new p2.World();
-            world.gravity = [0,0];
+            world.gravity = [0, 1];
             world.defaultContactMaterial.friction = 0.0;
 
             //addWalls({ topLeft: [-6, 3.5], bottomRight: [6, -3.5] });
@@ -559,11 +570,6 @@
             world.step(1/60);
 
 //
-
-            //Fill the docks on all attractors and set their positions
-            // sugarWorld.attractors.forEach(function(attractor) {
-            //     sugarWorld.updateDocking();
-            // });
 
             //Apply colors etc
             sugarWorld.chains.forEach(function(chain) {
