@@ -153,7 +153,7 @@
 
             //Create a position for the first element
             //by using the offsetVector * the number of particles
-            vPos = vPos.add((vOffset.multiply(this.particleCount)));
+            //vPos = vPos.add((vOffset.multiply(this.particleCount)));
 
             //
 
@@ -162,7 +162,7 @@
 
                 if(typeof lastBody != 'undefined') {
                     var vLastPos = new Vector(lastBody.position);
-                    vPos = vLastPos.subtract(vOffset);
+                    vPos = vLastPos.add(vOffset);
                 }
 
                 var particle = new Particle( { 
@@ -241,7 +241,7 @@
         }
 
         Chain.prototype.getNewDockPosition = function() {
-            var body0 = this.getBodyAt(0);
+            var body0 = this.getLastBody(); //this.getBodyAt(0);
             return [body0.position[0], body0.position[1]];
         } 
 
@@ -249,16 +249,6 @@
             var constraint = sugarWorld.lockConstraint(body, lastBody, this.stiffness, this.relaxation);
             this.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
         }
-
-        // Chain.prototype.getChildrenIds = function() {
-        //     var childrenArr = [];
-        //     var thisId = this.id;
-        //     sugarWorld.tree.forEach(function(el, i) {
-        //         if (typeof el.parent != 'undefined' && el.parent == thisId)
-        //             childrenArr.push(i);
-        //     });
-        //     return childrenArr;
-        // }
 
         Chain.prototype.update = function() {
             this.setDebugColors();
@@ -337,9 +327,9 @@
             this.txtObject = new PIXI.Text(this.txtString, {font: this.font, align : 'center'});
             this.txtObject.scale.x = 1/zoom;
             this.txtObject.scale.y = -1/zoom;
-            this.txtObject.position.x = this.boxShape.height/2 || this.boxShape.radius;
-            this.txtObject.position.y = this.boxShape.width/2 || this.boxShape.radius/2;
-            this.txtObject.rotation = - Math.PI / 2;
+            this.txtObject.position.x = -this.boxShape.height/2 || -this.boxShape.radius;
+            this.txtObject.position.y = -this.boxShape.width/2 || -this.boxShape.radius/2;
+            this.txtObject.rotation = Math.PI / 2;
             this.graphics.addChild(this.txtObject);
             this.moveGraphics();
         }
@@ -432,7 +422,7 @@
             //Move the last particle in the chain a bit to the side and rotate it
             // if (sugarWorld.tree[sugarWorld.treeIndex].angle != 0)
             //     sugarWorld.offsetDock(chain);
-            sugarWorld.createLockToParent(chain, 100000, 1);
+            sugarWorld.createLockToParent(chain, 1000000, 1);
         }
 
         sugarWorld.getDockPosition = function(i) {
@@ -475,7 +465,7 @@
         }
 
         sugarWorld.createLockToParent = function(chain, stiffness, relaxation) {
-            var body = chain.getLastBody();
+            var body = chain.getBodyAt(0);
             var lastBody = sugarWorld.getParentBody(chain.id);
             var constraint = sugarWorld.lockConstraint(body, lastBody, stiffness, relaxation);
             sugarWorld.locks.push( {constraint: constraint, bodyA: body, bodyB: lastBody} );
@@ -486,7 +476,7 @@
                 return sugarWorld.attractors[0].boxBody;
             else {
                 var parentId = sugarWorld.tree[id].parent;
-                return sugarWorld.chains[parentId].getFirstParticle().boxBody;
+                return sugarWorld.chains[parentId].getLastBody();
             }
         }
 
@@ -556,9 +546,6 @@
 
             var pos = sugarWorld.createNewAttractor();
 
-            document.addEventListener("keydown", function(e) {
-                sugarWorld.onKeyDown(e, pos);
-            }, false);
         }
 
         // Animation loop
